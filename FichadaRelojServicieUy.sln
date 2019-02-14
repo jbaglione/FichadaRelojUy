@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FichadaRelojUy", "FichadaRelojUy\FichadaRelojUy.csproj", "{7DB36E72-3006-47D7-8593-CE3BD41223F4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7DB36E72-3006-47D7-8593-CE3BD41223F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7DB36E72-3006-47D7-8593-CE3BD41223F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7DB36E72-3006-47D7-8593-CE3BD41223F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7DB36E72-3006-47D7-8593-CE3BD41223F4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {602C3C69-0EB4-49E2-BB9E-3E96926BB1BC}
+	EndGlobalSection
+EndGlobal
