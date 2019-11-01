@@ -26,8 +26,9 @@ namespace FichadaRelojUyService
         Timer t = new Timer();
         private Conexion shamanConexion = new Conexion();
         string m_exePath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-
         string dBServer1 = ConfigurationManager.AppSettings["DBServer1"];
+
+        string origenFichada = ConfigurationManager.AppSettings["origenFichada"];
 
         string timePool = ConfigurationManager.AppSettings["TimePool"];
         //bool setByDoc = ConfigurationManager.AppSettings["SetByDoc"] == "1";
@@ -36,13 +37,13 @@ namespace FichadaRelojUyService
 
         public Service1()
         {
-            InitializeComponent();            
+            InitializeComponent();
         }
 
         private string GetValueOf(string relojStringProperty, string propertyName)
         {
             propertyName += "=";
-            
+
             if (relojStringProperty.Contains(propertyName))
                 return relojStringProperty.Replace(propertyName, "");
             return "";
@@ -84,8 +85,15 @@ namespace FichadaRelojUyService
         {
             if (relojes == null || relojes.Count == 0)
             {
-                if (LeerRelojes())
-                    ProcesarRelojes();
+                if (origenFichada.ToLower() == "txt")
+                {
+                    ProcesarTXT();
+                }
+                else
+                {
+                    if (LeerRelojes())
+                        ProcesarRelojes();
+                }
             }
             else
                 ProcesarRelojes();
@@ -139,6 +147,103 @@ namespace FichadaRelojUyService
             catch (Exception ex)
             {
                 Logger.GetInstance().AddLog(false, "ProcesarRelojes()", ex.Message);
+            }
+        }
+
+        private void ProcesarTXT()
+        {
+            StreamReader fileReader = null;
+            try
+            {
+                Logger.GetInstance().AddLog(true, "ProcesarTXT()", "incio");
+
+                string pathSource = ConfigurationManager.AppSettings["dataTxt"].Split(';')[0];
+                string pathDest = Path.Combine(m_exePath, "marcas_" + modFechas.DateToSql(DateTime.Now).Replace("-", "_") + " " + DateTime.Now.Hour + "." +DateTime.Now.Minute + ".log");
+                short eliminar = Convert.ToInt16(ConfigurationManager.AppSettings["dataTxt"].Split(';')[1]);
+
+                File.Move(pathSource, pathDest);
+
+                fileReader = new StreamReader(pathDest);
+                List<RelojResponse> relojResponse = new List<RelojResponse>();
+                do
+                {
+                    string vLin = fileReader.ReadLine();
+
+                    if (vLin.Length > 48)
+                    {
+                        //Logger.GetInstance().AddLog(true, "ProcesarTXT()", "preparandose para leer valores");
+                        long numero_empleado;
+                        long.TryParse(vLin.Substring(0, 10), out numero_empleado);
+                        DateTime fecha = modFechas.NtoD(Convert.ToInt32(vLin.Substring(11, 10).Replace("-", "")));
+                        string fechaHora = vLin.Substring(11, 19);
+                        string tipo_marca = vLin.Substring(31, 2);
+                        string numero_reloj = vLin.Substring(34, 3);
+                        string numero_movil = vLin.Substring(42, 8);
+
+                        //Logger.GetInstance().AddLog(true, "ProcesarTXT()", "todos los valores leidos");
+
+                        if (fecha.Year == DateTime.Now.Year)
+                        {
+                            //Logger.GetInstance().AddLog(true, "ProcesarTXT()", "preparandose para encolar valores");
+                            RelojResponse relojResponseItem = new RelojResponse();
+                            relojResponseItem.Fich = fechaHora;
+                            relojResponseItem.Nro = Convert.ToInt32(numero_reloj);
+                            relojResponseItem.SdwEnrollNumber = numero_empleado.ToString();
+                            //relojResponseItem.IdwVerifyMode = idwVerifyMode; //TODO: que es?
+                            //01 entrada,  02 salida-int, 03 entrada_int, 04 salida
+                            int nTipoMarca = Convert.ToInt32(tipo_marca);
+                            //switch (nTipoMarca)
+                            //{
+                            //    case 1:
+                            //    case 3:
+                            //        relojResponseItem.IdwInOutMode = 0;
+                            //        break;
+                            //    case 2:
+                            //    case 4:
+                            //        relojResponseItem.IdwInOutMode = 1;
+                            //        break;
+                            //    default:
+                            //        Logger.GetInstance().AddLog(false, "ProcesarTXT()", string.Format("El valor {0} para tipo de marca es incorrecto, se asigna el valor 0", tipo_marca));
+                            //        relojResponseItem.IdwInOutMode = 0;
+                            //        break;
+                            //}
+
+                            if(nTipoMarca == 1 || nTipoMarca == 4)
+                            {
+                                relojResponseItem.IdwInOutMode = nTipoMarca == 1 ? 0 : 1;
+                                relojResponseItem.IdwWorkcode = Convert.ToInt32(numero_movil);
+                                relojResponse.Add(relojResponseItem);
+                                //Logger.GetInstance().AddLog(true, "ProcesarTXT()", string.Format("Fichada encolada: Fecha: {0}  Legajo: {1}", relojResponseItem.Fich, relojResponseItem.SdwEnrollNumber));
+                            }
+
+                        }
+
+                    }
+
+                } while (!fileReader.EndOfStream);
+
+                Logger.GetInstance().AddLog(true, "ProcesarTXT()", "listo para enviar lista a guardar.");
+
+                SaveInDataBase(null, relojResponse);
+
+                if (eliminar == 1)
+                {
+                    fileReader.Close();
+                    fileReader = null;
+                    Logger.GetInstance().AddLog(true, "ProcesarTXT()", "eliminando archivo local. " + pathDest);
+                    File.Delete(pathDest);
+                }
+                    
+            }
+            catch (Exception ex)
+            {
+                Logger.GetInstance().AddLog(false, "ProcesarTXT()", ex.Message);
+            }
+            finally
+            {
+                // Close streams
+                if (fileReader != null)
+                    fileReader.Close();
             }
         }
 
@@ -196,71 +301,7 @@ namespace FichadaRelojUyService
                         }
 
                         //SAVE IN DATABASE.
-                        if (relojResponse.Count > 0)
-                        {
-                            using (SqlConnection con = new SqlConnection(dBServer1))
-                            {
-                                using (SqlCommand cmd = new SqlCommand("sp_SetFichadaReloj", con))
-                                {
-                                    cmd.CommandType = CommandType.StoredProcedure;
-                                    con.Open();
-
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "Envios a Server1: " + dBServer1);
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "Cantidad de Registros: " + relojResponse.Count);
-
-                                    foreach (RelojResponse itemResponse in relojResponse)
-                                    {
-                                        Logger.GetInstance().AddLog(true, "clkZKSoft()", "Revisando Legajo: " + itemResponse.SdwEnrollNumber);
-                                        Logger.GetInstance().AddLog(true, "clkZKSoft()", "Fecha del Registro: " + itemResponse.Fich);
-                                        try
-                                        {
-                                            cmd.Parameters.Add("@reloj", SqlDbType.Int).Value = pRid;
-                                            cmd.Parameters.Add("@legajo", SqlDbType.VarChar, 10).Value = itemResponse.SdwEnrollNumber;                                           
-                                            cmd.Parameters.Add("@tipomov", SqlDbType.TinyInt).Value = itemResponse.IdwInOutMode;
-                                            cmd.Parameters.Add("@fechahora", SqlDbType.DateTime).Value = DateTime.Parse(itemResponse.Fich);                                          
-                                            cmd.Parameters.Add("@usuarioId", SqlDbType.BigInt).Value = 0;
-                                            //cmd.Parameters.Add("@terminalId", SqlDbType.).Value = 0;
-                                            //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@terminalId\", SqlDbType.VarChar).Value = 0;");
-                                            SqlParameter p2 = new SqlParameter("@terminalId", SqlDbType.Decimal);
-                                            p2.Precision = 18;
-                                            p2.Scale = 0;
-                                            p2.Value = 0;
-                                            cmd.Parameters.Add(p2);
-
-                                            cmd.Parameters.Add("@execRdo", SqlDbType.Int).Direction = ParameterDirection.Output;
-                                            cmd.Parameters.Add("@execMsg", SqlDbType.VarChar, 100).Direction = ParameterDirection.Output;
-                                            cmd.Parameters.Add("@execId", SqlDbType.BigInt).Direction = ParameterDirection.Output;
-
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@reloj\", SqlDbType.VarChar).Value: " + pRid.ToString());
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@legajo\", SqlDbType.VarChar).Value " + itemResponse.SdwEnrollNumber);
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@tipomov\", SqlDbType.VarChar).Value: " + itemResponse.IdwInOutMode);
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@fechahora\", SqlDbType.VarChar).Value: " + itemResponse.Fich);
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@usuarioId\", SqlDbType.VarChar).Value: 0");
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@terminalId\", SqlDbType.VarChar).Value = 0;");
-
-                                            //SqlDataReader reader = cmd.ExecuteReader();
-                                            cmd.ExecuteNonQuery();
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.ExecuteNonQuery() run ok");
-
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execRdo\"].Value: " + cmd.Parameters["@execRdo"].Value.ToString());
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execMsg\"].Value: " + cmd.Parameters["@execMsg"].Value.ToString());
-                                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execId\"].Value: " + cmd.Parameters["@execId"].Value.ToString());
-
-                                            if (Convert.ToBoolean(cmd.Parameters["@execRdo"].Value))
-                                                Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada Error en set fichada (execMsg): " + cmd.Parameters["@execMsg"].Value.ToString());
-                                            else
-                                                Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada OK");
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Logger.GetInstance().AddLog(false, "clkZKSoft()", "Excepción en SetFichada: " + ex.Message);
-                                        }
-
-                                        cmd.Parameters.Clear();
-                                    }
-                                }
-                            }
-                        }
+                        SaveInDataBase(pRid, relojResponse);
 
                         if (vClean)
                         {
@@ -296,6 +337,84 @@ namespace FichadaRelojUyService
                 Logger.GetInstance().AddLog(false, "clkZKSoft()", ex.Message);
             }
             return clkZKSoft;
+        }
+
+        private void SaveInDataBase(int? pRid, List<RelojResponse> relojResponse)
+        {
+
+            Logger.GetInstance().AddLog(true, "SaveInDataBase()", string.Format("Hay {0} registros para guardar", relojResponse.Count));
+            try
+            {
+                if (relojResponse.Count > 0)
+                {
+                    using (SqlConnection con = new SqlConnection(dBServer1))
+                    {
+                        using (SqlCommand cmd = new SqlCommand("sp_SetFichadaReloj", con))
+                        {
+                            cmd.CommandType = CommandType.StoredProcedure;
+                            con.Open();
+
+                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "Envios a Server1: " + dBServer1);
+                            Logger.GetInstance().AddLog(true, "clkZKSoft()", "Cantidad de Registros: " + relojResponse.Count);
+
+                            foreach (RelojResponse itemResponse in relojResponse)
+                            {
+                                Logger.GetInstance().AddLog(true, "clkZKSoft()", "Revisando Legajo: " + itemResponse.SdwEnrollNumber);
+                                Logger.GetInstance().AddLog(true, "clkZKSoft()", "Fecha del Registro: " + itemResponse.Fich);
+                                try
+                                {
+                                    cmd.Parameters.Add("@reloj", SqlDbType.Int).Value = pRid ?? itemResponse.Nro;
+                                    cmd.Parameters.Add("@legajo", SqlDbType.VarChar, 10).Value = itemResponse.SdwEnrollNumber;
+                                    cmd.Parameters.Add("@tipomov", SqlDbType.TinyInt).Value = itemResponse.IdwInOutMode;
+                                    cmd.Parameters.Add("@fechahora", SqlDbType.DateTime).Value = DateTime.Parse(itemResponse.Fich);
+                                    cmd.Parameters.Add("@usuarioId", SqlDbType.BigInt).Value = 0;
+                                    //cmd.Parameters.Add("@terminalId", SqlDbType.).Value = 0;
+                                    //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@termin(1alId\", SqlDbType.VarChar).Value = 0;");
+                                    SqlParameter p2 = new SqlParameter("@terminalId", SqlDbType.Decimal);
+                                    p2.Precision = 18;
+                                    p2.Scale = 0;
+                                    p2.Value = 0;
+                                    cmd.Parameters.Add(p2);
+
+                                    cmd.Parameters.Add("@execRdo", SqlDbType.Int).Direction = ParameterDirection.Output;
+                                    cmd.Parameters.Add("@execMsg", SqlDbType.VarChar, 100).Direction = ParameterDirection.Output;
+                                    cmd.Parameters.Add("@execId", SqlDbType.BigInt).Direction = ParameterDirection.Output;
+
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@reloj\", SqlDbType.VarChar).Value: " + (pRid ?? itemResponse.Nro).ToString());
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@legajo\", SqlDbType.VarChar).Value " + itemResponse.SdwEnrollNumber);
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@tipomov\", SqlDbType.VarChar).Value: " + itemResponse.IdwInOutMode);
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@fechahora\", SqlDbType.VarChar).Value: " + itemResponse.Fich);
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@usuarioId\", SqlDbType.VarChar).Value: 0");
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@terminalId\", SqlDbType.VarChar).Value = 0;");
+
+                                    //SqlDataReader reader = cmd.ExecuteReader();
+                                    cmd.ExecuteNonQuery();
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.ExecuteNonQuery() run ok");
+
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execRdo\"].Value: " + cmd.Parameters["@execRdo"].Value.ToString());
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execMsg\"].Value: " + cmd.Parameters["@execMsg"].Value.ToString());
+                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execId\"].Value: " + cmd.Parameters["@execId"].Value.ToString());
+
+                                    if (Convert.ToBoolean(cmd.Parameters["@execRdo"].Value))
+                                        Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada Error en set fichada (execMsg): " + cmd.Parameters["@execMsg"].Value.ToString());
+                                    else
+                                        Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada OK");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.GetInstance().AddLog(false, "clkZKSoft()", "Excepción en SetFichada: " + ex.Message);
+                                }
+
+                                cmd.Parameters.Clear();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.GetInstance().AddLog(false, "SaveInDataBase()", ex.Message);
+            }
         }
 
 
