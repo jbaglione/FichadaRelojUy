@@ -13,5 +13,6 @@ namespace FichadaRelojUyService
         public string DireccionIP { get; set; }
         public int Puerto { get; set; }
         public int Vaciar { get; set; }
+        public int CommPassword { get; set; }
     }
 }

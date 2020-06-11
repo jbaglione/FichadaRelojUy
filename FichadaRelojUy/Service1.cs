@@ -115,6 +115,8 @@ namespace FichadaRelojUyService
                     reloj.DireccionIP = GetValueOf(relojString[2], "DireccionIP");
                     reloj.Puerto = Convert.ToInt32(GetValueOf(relojString[3], "Puerto"));
                     reloj.Vaciar = Convert.ToInt32(GetValueOf(relojString[4], "Vaciar"));
+                    if(relojString.Count() > 5)
+                        reloj.CommPassword = Convert.ToInt32(GetValueOf(relojString[5], "CommPassword"));
 
                     relojes.Add(reloj);
                 }
@@ -136,7 +138,7 @@ namespace FichadaRelojUyService
                     Logger.GetInstance().AddLog(true, "ProcesarRelojes()", "Procesando " + relojes.Count + " relojes");
 
                     foreach (var item in relojes)
-                        this.clkZKSoft(item.Id, 1, item.Descripcion, item.DireccionIP, item.Puerto, 0, Convert.ToBoolean(item.Vaciar));
+                        this.clkZKSoft(item.Id, 1, item.Descripcion, item.DireccionIP, item.Puerto, 0, Convert.ToBoolean(item.Vaciar), item.CommPassword);
                 }
                 else
                     Logger.GetInstance().AddLog(true, "ProcesarRelojes()", "No se encontraron relojes, reinicie el servicio");
@@ -247,7 +249,7 @@ namespace FichadaRelojUyService
             }
         }
 
-        private bool clkZKSoft(int pRid, int pNro, string pDes, string pDir, int pPor, long pPsw, bool vClean = false)
+        private bool clkZKSoft(int pRid, int pNro, string pDes, string pDir, int pPor, long pPsw, bool vClean = false, int pCommPassword = 0)
         {
             bool clkZKSoft = false;
 
@@ -272,6 +274,10 @@ namespace FichadaRelojUyService
                 List<RelojResponse> relojResponse = new List<RelojResponse>();
 
                 Logger.GetInstance().AddLog(true, "clkZKSoft()", "Conectandose " + pDir + ":" + pPor);
+
+                if(pCommPassword > 0)
+                    Reloj.SetCommPassword(pCommPassword);
+
                 if (Reloj.Connect_Net(pDir, pPor))
                 {
                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "Conectado a " + pDir + ":" + pPor);
@@ -387,13 +393,14 @@ namespace FichadaRelojUyService
                                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@usuarioId\", SqlDbType.VarChar).Value: 0");
                                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@terminalId\", SqlDbType.VarChar).Value = 0;");
 
-                                    //SqlDataReader reader = cmd.ExecuteReader();
+                                  
+                                    //COMENTADO
                                     cmd.ExecuteNonQuery();
                                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.ExecuteNonQuery() run ok");
 
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execRdo\"].Value: " + cmd.Parameters["@execRdo"].Value.ToString());
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execMsg\"].Value: " + cmd.Parameters["@execMsg"].Value.ToString());
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execId\"].Value: " + cmd.Parameters["@execId"].Value.ToString());
+                                    //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execRdo\"].Value: " + cmd.Parameters["@execRdo"].Value.ToString());
+                                    //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execMsg\"].Value: " + cmd.Parameters["@execMsg"].Value.ToString());
+                                    //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execId\"].Value: " + cmd.Parameters["@execId"].Value.ToString());
 
                                     if (Convert.ToBoolean(cmd.Parameters["@execRdo"].Value))
                                         Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada Error en set fichada (execMsg): " + cmd.Parameters["@execMsg"].Value.ToString());
