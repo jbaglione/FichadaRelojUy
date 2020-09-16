@@ -17,6 +17,9 @@ using ShamanClases;
 using zkemkeeper;
 using System.Net.Mail;
 using System.Data.SqlClient;
+using ShamanExpressDLL;
+using modFechas = ShamanClases.modFechas;
+using modDeclares = ShamanClases.modDeclares;
 
 namespace FichadaRelojUyService
 {
@@ -31,9 +34,12 @@ namespace FichadaRelojUyService
         string origenFichada = ConfigurationManager.AppSettings["origenFichada"];
 
         string timePool = ConfigurationManager.AppSettings["TimePool"];
+        int saveInDB = Convert.ToInt32(ConfigurationManager.AppSettings["TimePool"]);
         //bool setByDoc = ConfigurationManager.AppSettings["SetByDoc"] == "1";
 
         List<Relojes> relojes;
+
+        DateTime fecLastCreateGrilla;
 
         public Service1()
         {
@@ -56,7 +62,60 @@ namespace FichadaRelojUyService
             t.Start();
             Logger.GetInstance().AddLog(true, "OnStart", "Servicio inicializado.");
             CustomMail mail = new CustomMail(MailType.Information, "Se ha inicializado el servicio de Fichada", "Servicio de Fichada");
+
+            CreateGrilla();
+
             mail.Send();
+        }
+
+        private void CreateGrilla()
+        {
+            if(ConnectDLL())
+            {
+                if (fecLastCreateGrilla == null || fecLastCreateGrilla.ToString("dd/MM/yyyy") != DateTime.Now.ToString("dd/MM/yyyy"))
+                {
+                    conGrillaOperativa objConGrillaOperativa = new conGrillaOperativa();
+                    objConGrillaOperativa.CreateGrillaView(DateTime.Now, true);
+                    Logger.GetInstance().AddLog(true, "CreateGrilla", $"CreateGrillaView({DateTime.Now}, true)");
+                    fecLastCreateGrilla = DateTime.Now;
+                }
+                modDatabase.cnnsNET.Remove(ShamanExpressDLL.modDeclares.cnnDefault);
+            }
+        }
+
+        private bool ConnectDLL()
+        {
+            StartUp init = new StartUp();
+
+            if (init.GetValoresHardkey(false))
+            {
+
+                if (init.GetVariablesConexion())
+                {
+
+                    if (init.AbrirConexion(ShamanExpressDLL.modDeclares.cnnDefault))
+                    {
+                        ShamanExpressDLL.modFechas.InitDateVars();
+                        Logger.GetInstance().AddLog(true, "setConexionDB", "Conectado a Database Shaman");
+                        return true;
+                    }
+                    else
+                    {
+                        Logger.GetInstance().AddLog(false, "setConexionDB", "No se pudo conectar a base de datos Shaman - " + init.MyLastExec.ErrorDescription);
+                    }
+                }
+                else
+                {
+                    Logger.GetInstance().AddLog(false, "setConexionDB", "No se pudieron recuperar las variables de conexión - " + init.MyLastExec.ErrorDescription);
+                }
+            }
+            else
+            {
+                Logger.GetInstance().AddLog(false, "setConexionDB", "No se encuentran los valores HKey - " + init.MyLastExec.ErrorDescription);
+            }
+
+            return false;
+
         }
 
         protected override void OnPause()
@@ -83,6 +142,8 @@ namespace FichadaRelojUyService
 
         public void ElapsedHandler()
         {
+            CreateGrilla();
+
             if (relojes == null || relojes.Count == 0)
             {
                 if (origenFichada.ToLower() == "txt")
@@ -277,7 +338,7 @@ namespace FichadaRelojUyService
 
                 if(pCommPassword > 0)
                     Reloj.SetCommPassword(pCommPassword);
-
+                
                 if (Reloj.Connect_Net(pDir, pPor))
                 {
                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "Conectado a " + pDir + ":" + pPor);
@@ -394,9 +455,16 @@ namespace FichadaRelojUyService
                                     Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters.Add(\"@terminalId\", SqlDbType.VarChar).Value = 0;");
 
                                   
-                                    //COMENTADO
-                                    cmd.ExecuteNonQuery();
-                                    Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.ExecuteNonQuery() run ok");
+                                    if(this.saveInDB == 1)
+                                    {
+                                        cmd.ExecuteNonQuery();
+                                        Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.ExecuteNonQuery() run ok");
+                                    }
+                                    else
+                                    {
+                                        Logger.GetInstance().AddLog(true, "clkZKSoft()", "saveInDB is false, cmd.ExecuteNonQuery() NOT RUN");
+                                    }
+
 
                                     //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execRdo\"].Value: " + cmd.Parameters["@execRdo"].Value.ToString());
                                     //Logger.GetInstance().AddLog(true, "clkZKSoft()", "cmd.Parameters[\"@execMsg\"].Value: " + cmd.Parameters["@execMsg"].Value.ToString());
@@ -405,7 +473,7 @@ namespace FichadaRelojUyService
                                     if (Convert.ToBoolean(cmd.Parameters["@execRdo"].Value))
                                         Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada Error en set fichada (execMsg): " + cmd.Parameters["@execMsg"].Value.ToString());
                                     else
-                                        Logger.GetInstance().AddLog(false, "clkZKSoft()", "SetFichada OK");
+                                        Logger.GetInstance().AddLog(true, "clkZKSoft()", "SetFichada OK");
                                 }
                                 catch (Exception ex)
                                 {
