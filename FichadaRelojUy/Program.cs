@@ -9,10 +9,28 @@ namespace FichadaRelojUyService
 {
     static class Program
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        static void Main()
+        public static void Main(string[] args)
+        {
+            if (args.FirstOrDefault()?.ToUpper() == "/CONSOLE")
+            {
+                RunAsConsole();
+            }
+            else
+            {
+                RunAsService();
+            }
+        }
+        private static void RunAsConsole()
+        {
+            Service1 serv = new Service1();
+            serv.StartService();
+
+            Console.WriteLine("Running service as console. Press any key to stop.");
+            Console.ReadKey();
+
+            serv.Stop();
+        }
+        private static void RunAsService()
         {
             //#if (!DEBUG)
             ServiceBase[] ServicesToRun;

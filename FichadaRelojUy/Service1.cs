@@ -57,6 +57,10 @@ namespace FichadaRelojUyService
 
         protected override void OnStart(string[] args)
         {
+            new System.Threading.Thread(StartService).Start();
+        }
+        internal void StartService()
+        {
             t.Elapsed += delegate { ElapsedHandler(); };
             t.Interval = Convert.ToInt32(timePool) * 60000;
             t.Start();
@@ -66,6 +70,7 @@ namespace FichadaRelojUyService
             CreateGrilla();
 
             mail.Send();
+            Console.WriteLine("Starting service");
         }
 
         private void CreateGrilla()
