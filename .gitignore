@@ -197,3 +197,5 @@ FakesAssemblies/
 
 # Others
 *.rar
+*.zip
+Logs/
